@@ -102,39 +102,82 @@ export class MpesaService {
   static async checkTransactionStatus(
     checkoutRequestId: string
   ): Promise<HashbackStatusResponse> {
-    const response = await fetch(`${HASHBACK_API_BASE_URL}/transactionstatus`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        api_key: HASHBACK_API_KEY,
-        account_id: HASHBACK_ACCOUNT_ID,
-        checkoutid: checkoutRequestId,
-      }),
-    });
+    try {
+      const response = await fetch(`${HASHBACK_API_BASE_URL}/transactionstatus`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          api_key: HASHBACK_API_KEY,
+          account_id: HASHBACK_ACCOUNT_ID,
+          checkoutid: checkoutRequestId,
+        }),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      throw new Error(`Status check failed: ${response.status} ${errorText}`.trim());
+      if (!response.ok) {
+        return {
+          ResponseCode: "pending",
+          ResponseDescription: "Status check pending",
+        };
+      }
+
+      const data = await response.json().catch(() => null);
+      return (
+        data || {
+          ResponseCode: "pending",
+          ResponseDescription: "Status check pending",
+        }
+      );
+    } catch {
+      return {
+        ResponseCode: "pending",
+        ResponseDescription: "Status check pending",
+      };
     }
-
-    return response.json();
   }
 
   static async getPaymentStatus(
     checkoutRequestId: string
   ): Promise<"completed" | "failed" | "pending"> {
-    const status = await this.checkTransactionStatus(checkoutRequestId);
+    const status: any = await this.checkTransactionStatus(checkoutRequestId);
 
-    // Hashback: ResultCode === "0" → payment completed successfully.
-    if (String(status.ResultCode) === "0") return "completed";
+    const resultCode = String(
+      status.ResultCode ?? status.resultCode ?? status.result_code ?? ""
+    ).trim();
+    const statusVal = String(
+      status.status ?? status.Status ?? status.state ?? ""
+    ).toLowerCase();
+    const resultDesc = String(
+      status.ResultDesc ?? status.resultDesc ?? status.message ?? ""
+    ).toLowerCase();
 
-    const desc = String(status.ResultDesc ?? status.ResponseDescription ?? "").toLowerCase();
+    // ── Success ──────────────────────────────────────────────────────────────
     if (
-      desc.includes("cancel") ||
-      desc.includes("fail") ||
-      desc.includes("insufficient") ||
-      desc.includes("reject")
+      resultCode === "0" ||
+      statusVal === "paid" ||
+      statusVal === "success" ||
+      statusVal === "completed" ||
+      resultDesc.includes("success") ||
+      resultDesc.includes("processed successfully") ||
+      resultDesc.includes("accepted for processing")
     ) {
+      return "completed";
+    }
+
+    // ── Conclusive failure ───────────────────────────────────────────────────
+    const isConclusiveFailure =
+      resultDesc.includes("cancel") ||
+      resultDesc.includes("insufficient") ||
+      resultDesc.includes("declined") ||
+      resultDesc.includes("wrong pin") ||
+      resultDesc.includes("invalid pin") ||
+      resultDesc.includes("user cannot be reached") ||
+      resultDesc.includes("timed out") ||
+      resultDesc.includes("timeout") ||
+      statusVal === "failed" ||
+      statusVal === "cancelled" ||
+      statusVal === "canceled";
+
+    if (isConclusiveFailure) {
       return "failed";
     }
 

@@ -424,6 +424,34 @@ function PaymentStep() {
   const [isPolling, setIsPolling] = useState(false);
   const [showManualConfirm, setShowManualConfirm] = useState(false);
 
+  const handleManualConfirm = async () => {
+    const id = state.checkoutId;
+    if (!id) {
+      toast.error("No checkout ID found. Please try again.");
+      return;
+    }
+    toast.message("Verifying payment status with M-Pesa...");
+    try {
+      const status = await MpesaService.getPaymentStatus(id);
+      if (status === "completed") {
+        setIsPolling(false);
+        setShowManualConfirm(false);
+        toast.success("Payment confirmed!");
+        goTo("success");
+      } else if (status === "failed") {
+        setIsPolling(false);
+        setShowManualConfirm(false);
+        setPaymentState("error");
+        setErrorMessage("Payment was not completed. Please try again.");
+        toast.error("Payment failed");
+      } else {
+        toast.message("Payment is still pending. If you just entered your PIN, wait a few seconds and click again.");
+      }
+    } catch {
+      toast.error("Could not confirm payment yet. Please wait a moment and try again.");
+    }
+  };
+
   const handleInitiatePayment = async () => {
     setPaymentState("initiating");
     setErrorMessage("");
@@ -448,30 +476,32 @@ function PaymentStep() {
       setPaymentState("processing");
       setIsPolling(true);
 
-      // Poll payment status (same strategy as the reference project):
-      // - start after 3s
+      // Poll payment status:
+      // - start after 5s
       // - then every 5s
-      // - max 12 attempts (~1 minute)
+      // - max 24 attempts (~2 minutes)
       const pollPaymentStatus = (checkoutId: string) => {
         let attempts = 0;
-        const maxAttempts = 12;
+        const maxAttempts = 24;
 
         const checkStatus = async () => {
           if (attempts >= maxAttempts) {
             setIsPolling(false);
             setPaymentState("error");
+            setShowManualConfirm(true);
             setErrorMessage(
-              'Payment confirmation timeout. If you already paid, click "I have paid" below.'
+              'Payment confirmation is taking longer than expected. If money was deducted, click "I Have Already Paid" below to complete your ticket.'
             );
             toast.error(
-              'Payment confirmation timeout. If you already paid, click "I have paid" below.'
+              'Payment confirmation is taking longer than expected. If money was deducted, click "I Have Already Paid" below.',
+              { duration: 10000 }
             );
             return;
           }
 
           attempts += 1;
 
-          // Show manual confirm button immediately (same as the reference project)
+          // Show manual confirm button immediately
           if (attempts === 1) setShowManualConfirm(true);
 
           try {
@@ -489,8 +519,8 @@ function PaymentStep() {
               setIsPolling(false);
               setShowManualConfirm(false);
               setPaymentState("error");
-              setErrorMessage("Payment failed");
-              toast.error("Payment failed");
+              setErrorMessage("Payment failed or was cancelled.");
+              toast.error("Payment failed or was cancelled.");
               return;
             }
 
@@ -501,7 +531,7 @@ function PaymentStep() {
           }
         };
 
-        setTimeout(checkStatus, 3000);
+        setTimeout(checkStatus, 5000);
       };
 
       pollPaymentStatus(result.checkoutRequestId);
@@ -560,31 +590,10 @@ function PaymentStep() {
           {showManualConfirm && state.checkoutId && (
             <button
               type="button"
-              onClick={async () => {
-                if (!state.checkoutId || !isPolling) return;
-                try {
-                  const status = await MpesaService.getPaymentStatus(state.checkoutId);
-                  if (status === "completed") {
-                    setIsPolling(false);
-                    setShowManualConfirm(false);
-                    toast.success("Payment successful!");
-                    goTo("success");
-                  } else if (status === "failed") {
-                    setIsPolling(false);
-                    setShowManualConfirm(false);
-                    setPaymentState("error");
-                    setErrorMessage("Payment failed");
-                    toast.error("Payment failed");
-                  } else {
-                    toast.message("Payment still pending. Please wait…");
-                  }
-                } catch {
-                  toast.error("Could not confirm payment yet. Please try again.");
-                }
-              }}
-              className="mt-6 text-sm underline text-muted-foreground hover:text-foreground"
+              onClick={handleManualConfirm}
+              className="mt-6 text-sm underline text-muted-foreground hover:text-foreground cursor-pointer"
             >
-              I have paid
+              I have already entered my PIN
             </button>
           )}
         </>
@@ -595,21 +604,32 @@ function PaymentStep() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10 mb-4">
             <AlertCircle className="w-8 h-8 text-destructive" />
           </div>
-          <h2 className="text-2xl md:text-3xl font-bold text-primary">Payment Failed</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-primary">Payment Status</h2>
           <p className="mt-3 text-sm text-destructive px-4">{errorMessage}</p>
-          <div className="mt-6 flex flex-col sm:flex-row gap-3 px-4">
-            <button
-              onClick={handleInitiatePayment}
-              className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3.5 rounded-xl transition-smooth"
-            >
-              Try Again
-            </button>
-            <button
-              onClick={() => goTo("details")}
-              className="flex-1 bg-secondary hover:bg-secondary/80 text-secondary-foreground font-bold py-3.5 rounded-xl transition-smooth"
-            >
-              Go Back
-            </button>
+          <div className="mt-6 flex flex-col gap-3 px-4">
+            {state.checkoutId && (
+              <button
+                type="button"
+                onClick={handleManualConfirm}
+                className="w-full bg-[oklch(0.55_0.18_140)] hover:bg-[oklch(0.55_0.18_140)]/90 text-white font-bold py-3.5 rounded-xl transition-smooth shadow-sm cursor-pointer"
+              >
+                I Have Already Paid (Check Status)
+              </button>
+            )}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={handleInitiatePayment}
+                className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3.5 rounded-xl transition-smooth"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={() => goTo("details")}
+                className="flex-1 bg-secondary hover:bg-secondary/80 text-secondary-foreground font-bold py-3.5 rounded-xl transition-smooth"
+              >
+                Go Back
+              </button>
+            </div>
           </div>
         </>
       )}
