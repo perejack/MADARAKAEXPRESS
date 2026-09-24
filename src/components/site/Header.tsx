@@ -15,11 +15,7 @@ export function Header() {
   return (
     <>
       <div className="bg-primary text-primary-foreground text-xs py-2 px-6 flex justify-between items-center relative z-50">
-        <div className="flex gap-4">
-          <span className="opacity-90">{siteConfig.businessName}</span>
-          <span className="opacity-50">|</span>
-          <span className="opacity-90">{siteConfig.tagline}</span>
-        </div>
+        <div className="flex gap-4"></div>
         <div className="hidden sm:flex gap-4">
           <a href={`mailto:${siteConfig.supportEmail}`} className="opacity-90 hover:opacity-100 transition-smooth">
             {siteConfig.supportEmail}
