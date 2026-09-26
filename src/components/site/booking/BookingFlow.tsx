@@ -488,21 +488,13 @@ function PaymentStep() {
           if (attempts >= maxAttempts) {
             setIsPolling(false);
             setPaymentState("error");
-            setShowManualConfirm(true);
-            setErrorMessage(
-              'Payment confirmation is taking longer than expected. If money was deducted, click "I Have Already Paid" below to complete your ticket.'
-            );
-            toast.error(
-              'Payment confirmation is taking longer than expected. If money was deducted, click "I Have Already Paid" below.',
-              { duration: 10000 }
-            );
+            setShowManualConfirm(false);
+            setErrorMessage("Payment confirmation timed out. Please try again.");
+            toast.error("Payment confirmation timed out. Please try again.");
             return;
           }
 
           attempts += 1;
-
-          // Show manual confirm button immediately
-          if (attempts === 1) setShowManualConfirm(true);
 
           try {
             const status = await MpesaService.getPaymentStatus(checkoutId);
@@ -586,16 +578,6 @@ function PaymentStep() {
           </p>
           <p className="mt-1 text-sm text-muted-foreground">Check your phone and enter your M-Pesa PIN to complete the booking.</p>
           <p className="mt-4 text-xs text-muted-foreground/60">Do not close this page. Waiting for M-Pesa confirmation...</p>
-
-          {showManualConfirm && state.checkoutId && (
-            <button
-              type="button"
-              onClick={handleManualConfirm}
-              className="mt-6 text-sm underline text-muted-foreground hover:text-foreground cursor-pointer"
-            >
-              I have already entered my PIN
-            </button>
-          )}
         </>
       )}
 
@@ -607,15 +589,6 @@ function PaymentStep() {
           <h2 className="text-2xl md:text-3xl font-bold text-primary">Payment Status</h2>
           <p className="mt-3 text-sm text-destructive px-4">{errorMessage}</p>
           <div className="mt-6 flex flex-col gap-3 px-4">
-            {state.checkoutId && (
-              <button
-                type="button"
-                onClick={handleManualConfirm}
-                className="w-full bg-[oklch(0.55_0.18_140)] hover:bg-[oklch(0.55_0.18_140)]/90 text-white font-bold py-3.5 rounded-xl transition-smooth shadow-sm cursor-pointer"
-              >
-                I Have Already Paid (Check Status)
-              </button>
-            )}
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={handleInitiatePayment}
